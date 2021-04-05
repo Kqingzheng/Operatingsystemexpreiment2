@@ -4,37 +4,53 @@
 操作系统实验二
 
 
-一、进程控制
+二、分页式存储器管理
 
 
-1.1目的
+2.1目的
 
 
-模拟操作系统内核对进程的控制和管理：包括进程的创建和撤销、进程状态的切换和简单的内存空间管理。掌握进程三种状态转换的原理以及内存的分配算法。
+1、熟练掌握分页式管理基本原理，并在实验过程中体现内存空间的配与回收、地址转换过程。
 
 
-1.2内容
+2、 掌握利用“位示图”管理内存与置换空间的分配与回收。
 
 
-1、定义管理每个进程的数据结构 PCB：包含进程名称、队列指针、分配的物理内存区域（基址和长度）。每创建一个进程时，需要为其创建 PCB 并分配空闲内存空间，对 PCB 进行初始化，并加入就绪队列。
+3、 掌握基本的位运算。
 
 
-2、模拟触发进程状态转换的事件：采用键盘控制方法来模拟触发进程状态切换的事件（例如输入 1 代表创建新进程、2 执行进程时间片到、3 阻塞执行进 程、4 唤醒第一个阻塞进程、5 终止执行进程），实现对应的控制程序。
+4、 掌握请求分页式存储管理基本原理，并在实验过程中体现内存与置换空间的分配与回收、地址转换以及缺页处理过程。
 
 
-3、根据当前发生的事件对进程的状态进行切换，并显示出当前系统中的执行队列、就绪队列和阻塞队列。
+2.2内容
 
 
-4、完成可变分区的分配与回收，创建进程的同时申请一块连续的内存空间，在 PCB 中设置好基址和长度，结束进程时回收分配的内存空间。分配可采用最佳适应算法，碎片大小为 4Kb,最后回收所有进程的空间，对空间分区的合并。可以查看进程所占的空间和系统空闲空间。
+在实验 1 基础上实现分页式存储管理内存分配和地址转换过程。进一步实现请求分页式存储管理过程，包括内存和置换空间管理、地址转换以及缺页处理，能够体现 FIFO 和 LRU 算法思想。
 
 
-1.3数据结构
+1、建立一个位示图数据结构，用来模拟内存的使用情况。位示图是利用若干位的 0/1 值代表某类空间的占用状态的数据结构。在本实验中，位示图的位数与设定的物理块个数相同。程序启动时可利用一组随机 0 或 1 填充位示图，以模拟程序开始执行是内存已被占用状态。
+
+
+2、在实验 1 基础上扩充 PCB，添加进程大小和页表，创建进程时输入进程大小，并根据程序中设定的页面大小为进程分配页表空间，并分配物理块。
+
+
+3、输入当前执行进程所要访问的逻辑地址，并将其转换成相应的物理地址。
+
+
+4、进程退出时，根据其页表内容将位示图对应位置的“1”回填为“0”。
+
+
+5、扩充页表，将其变成支持请求和置换功能的二维页表（增加存在位等）。创建进程时可装入固定的前三页（或键盘输入初始装入页数，不同进程的装入个数可以不同），其余页装入到置换空间内（置换空间大小应为内存空间大小的1.5-2 倍，对其还需建立独立的置换空间位示图）。
+
+
+6、分别采用FIFO或LRU置换算法对地址转换过程中可能遇到的缺页现象进行页面置换。可将多次地址转换过程中所涉及到的页号视为进程的页面访问序列，从而计算置换次数和缺页率。
+
+
+2.3数据结构
 
 
 定义PCB类
-
-
-public class PCB {
+public class PCB implements Serializable {
     String name;
     int start;
     int length;
@@ -44,39 +60,48 @@ public class PCB {
 }
 
 
-定义内存Memory类
-
-
-public class Memory {
-    int begin;
-    int end;
-    int size;
-    Memory before;
-    Memory next;
-    final int fragment = 2;
+定义扩充的PCB类
+public class PCB_plus extends PCB implements Serializable {
+    Extended_page_table[] page_tables;
+    PCB_plus next;
+    final static int init_page_size = 3;
+    Queue<Integer> fifo = new LinkedList<Integer>();
+    Queue<Integer> lru = new LinkedList<Integer>();
+    List<Weight> list = new ArrayList<Weight>();
+    String answer_fifo = "";
+    String answer_lru = "";
+    String answer_opt = "";
+    int fifo_success = 0;//成功次数
+    int fifo_fail = 0;//失败次数
+    int lru_success = 0;//成功次数
+    int lru_fail = 0;//失败次数
+    int opt_fail = 0;
+    int opt_success = 0;
 }
 
 
-定义就绪、执行、阻塞队列和系统内存大小
+定义位示图类
+public class Bitmap implements Serializable {
+    final static int piece_size = 1024;
+    int map_size;
+    int[][] bitmap;
+    int[][] displaced_partition;
+    int free_size;//位示图空闲块数
+    int displaced_partition_size;//置换空间空闲块数
+}
 
 
-final PCB ready_head = new PCB("head", 0);
-final PCB block_head = new PCB("head", 0);
-final PCB run_head = new PCB("head", 0);
-final Memory memory_head = new Memory();
-
-1.4算法设计及流程图
-
-创建进程：将新创建的进程（不与已存在的进程重名）申请内存空间成功后加入就绪队列，进行自动调度。
-
-时间片轮转：执行队列出队的进程入队就绪队列，进行自动调度。
-
-自动调度：执行队列是否为空，为空则就绪队列出队的进程入队执行队列。
-
-阻塞：执行队列出队的进程入队阻塞队列，进行自动调度。
-
-唤醒：阻塞队列出队的进程入队就绪队列，进行自动调度。
-
-终止进程：执行队列出队，出队的进程将内存空间释放。
+定义扩充页表类
+public class Extended_page_table implements Serializable {
+    int page_number;//页号
+    int block_number;//内存块号
+    boolean status_bit;//状态位
+    boolean modify_bit;//修改位
+    int external_storage_address;//置换空间块号
+}
+定义带权重的OPT算法辅助类
+public class Weight implements Serializable {
+    int pagename;
+    int weight;
 
 
